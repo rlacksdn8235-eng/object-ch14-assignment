@@ -9,9 +9,9 @@ import java.util.List;
 
 public class CompositeRatePolicy extends BasicRatePolicy {
     private final Duration seconds;
-    private final List<? extends Calculator> calculators;
+    private final List<Calculator> calculators;
 
-    public CompositeRatePolicy(Duration seconds, List<? extends Calculator> calculators) {
+    public CompositeRatePolicy(Duration seconds, List<Calculator> calculators) {
         this.seconds = seconds;
         this.calculators = calculators;
     }
