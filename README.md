@@ -139,3 +139,39 @@ AmountCalculator 를 CompositeRatePolicy 로 변경하고
 Calculator에 각자 메서드들이 많은데 이것도 나중에 분리?
 
 자정으로 나누고 계산하고 보통 비슷한 흐름
+
+
+--------------
+
+
+기존의 Calculator의 책임을 확실하게 분리하고
+변하지 않는것과 변하는것을 구분지어
+변하는 것을 추상화 시킨다.
+
+초당 금액 이라는 규칙은 변하지 않는다.
+조건은 변한다.
+
+정책은 BasicRatePolicy 하나를 사용하며 인스턴스 변수를 List<FeeRule> 로 변경시켰다
+- A시부터 B시까지 초당 얼마인지를 포함하고있는 FeeRule
+
+`BasicRatePolicy`에서 계산하는 흐름
+1. `feeRule.calculateFee(call)` 이라고 요청을 보내면 FeeRule이
+금액을 계산하는데 `FeeCondition`에게 조건에 맞게 구간을 나누라고 요청을 보낸다.
+   1. `FeeCondition`에서 구간에 맞게 분리하고 각 방식에 맞는 로직으로 계산한다.
+2. `FeeCondition`에게 받은 `intervals` 리스트를 반복시킨다.
+   1. `interval`를 초로 변환한다.
+   2. 규칙에 맞는 초로 나눈다.
+   3. 규칙에 맞는 금액을 곱해 금액을 산출한다.
+3. 계산해서 나온 금액을 result에 더해준다.
+4. 모든 구간의 금액을 더한후 반환한다.
+
+이과정은 모두 동일하고 변하는건 조건을 설정해 주는 것
+
+각 방식에 맞는 조건을 구현한 `FeeCondition`의 구현체들을 만든다.
+
+`FeeCondition`의 구현체들은 각 조건에 맞는 인스턴스 변수를 보유하며
+`findIntervals` 메서드 안에서 조건에 맞는 로직을 구현한다.
+
+변하는 조건을 추상화 하고 변하지 않는 규칙을 하나로 합쳤다
+`FeeCondition`에서 어떻게 나누는지는 캡슐화 되어있어 `FeeRule`은 모르는 상태로
+계산이 가능하다.
