@@ -1,12 +1,14 @@
 package org.example;
 
 
-import org.example.policy.basic.CompositeRatePolicy;
-import org.example.policy.basic.RegularPolicy;
-import org.example.calculator.DayOfWeekAmountCalculator;
-import org.example.calculator.TimeAmountCalculator;
-import org.example.calculator.TimeSlotAmountCalculator;
+import org.example.fee.*;
+import org.example.fee.condition.DayAmountFeeCondition;
+import org.example.fee.condition.TimeAmountFeeCondition;
+import org.example.fee.condition.TimeFixedAmountFeeCondition;
+import org.example.fee.condition.TimeSlotAmountFeeCondition;
+import org.example.policy.basic.BasicRatePolicy;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -26,16 +28,23 @@ public class Main {
     // 180초 / 10초 = 18단위
     // 18단위 * 18원 = 324원
     public static void regularRateTest() {
-        RegularPolicy ratePolicy = new RegularPolicy(
-                Duration.ofSeconds(10), // 10초당
-                Money.wons(18)
+        TimeFixedAmountFeeCondition timeFixedAmountFeeCondition = new TimeFixedAmountFeeCondition();
+        FeeRule timeFixedFeeRule = new FeeRule(
+                timeFixedAmountFeeCondition,
+                Money.wons(18),
+                Duration.ofSeconds(10)
+        );
+        BasicRatePolicy ratePolicy = new BasicRatePolicy(
+                List.of(timeFixedFeeRule)
         );
 
         Phone phone = new Phone(ratePolicy);
 
         Call call = new Call(
-                LocalDateTime.of(2026, 4, 30, 0, 0),
-                LocalDateTime.of(2026, 4, 30, 0, 3)
+                new DateTimeRange(
+                        LocalDateTime.of(2026, 4, 30, 0, 0),
+                        LocalDateTime.of(2026, 4, 30, 0, 3)
+                )
         );
 
         phone.addCall(call);
@@ -51,33 +60,47 @@ public class Main {
     // 19~20시: 15원 구간 1시간 계산
     // 18 * 3600 + 15 * 3600 = 11880
     public static void timeRateTest() {
-        TimeAmountCalculator timeBased0to19 = new TimeAmountCalculator(
-                LocalTime.of(0, 0),
-                LocalTime.of(19, 0),
-                Money.wons(18)
+        TimeAmountFeeCondition timeBased0to19 = new TimeAmountFeeCondition(
+                new TimeRange(
+                        LocalTime.of(0, 0),
+                        LocalTime.of(19, 0)
+                )
         );
-        TimeAmountCalculator timeBased19to24 = new TimeAmountCalculator(
-                LocalTime.of(19, 0),
-                LocalTime.of(23, 59, 59),
-                Money.wons(15)
+        TimeAmountFeeCondition timeBased19to24 = new TimeAmountFeeCondition(
+                new TimeRange(
+                        LocalTime.of(19, 0),
+                        LocalTime.of(23, 59, 59)
+                )
+        );
+        FeeRule feeRule0to19 = new FeeRule(
+                timeBased0to19,
+                Money.wons(18),
+                Duration.ofSeconds(10)
+        );
+        FeeRule feeRule19to24 = new FeeRule(
+                timeBased19to24,
+                Money.wons(15),
+                Duration.ofSeconds(10)
         );
 
-        CompositeRatePolicy ratePolicy = new CompositeRatePolicy(
-                Duration.ofSeconds(10), // 10초당
-                List.of(timeBased0to19, timeBased19to24)
+        BasicRatePolicy ratePolicy = new BasicRatePolicy(
+                List.of(feeRule0to19, feeRule19to24)
         );
 
         Phone phone = new Phone(ratePolicy);
 
         Call call = new Call(
-                LocalDateTime.of(2026, 4, 30, 18, 0),
-                LocalDateTime.of(2026, 4, 30, 20, 0)
+                new DateTimeRange(
+                        LocalDateTime.of(2026, 4, 30, 18, 0),
+                        LocalDateTime.of(2026, 4, 30, 20, 0)
+                )
         );
         Call call2 = new Call(
-                LocalDateTime.of(2026, 4, 30, 20, 0),
-                LocalDateTime.of(2026, 4, 30, 23, 59, 59)
+                new DateTimeRange(
+                        LocalDateTime.of(2026, 4, 30, 20, 0),
+                        LocalDateTime.of(2026, 4, 30, 23, 59, 59)
+                )
         );
-
         phone.addCall(call);
 
         Money fee = phone.calculateFee();
@@ -91,22 +114,49 @@ public class Main {
     // 토요일 00~03시: 휴일 요금 3시간 계산
     // 61560
     public static void dayOfWeekRateTest() {
-        DayOfWeekAmountCalculator dayOfWeekCalculator =
-                new DayOfWeekAmountCalculator(
-                        Money.wons(38), // 평일
-                        Money.wons(19)  // 휴일
-                );
+        DayAmountFeeCondition weekFeeCondition = new DayAmountFeeCondition(
+                List.of(
+                        DayOfWeek.MONDAY,
+                        DayOfWeek.TUESDAY,
+                        DayOfWeek.WEDNESDAY,
+                        DayOfWeek.THURSDAY,
+                        DayOfWeek.FRIDAY
+                )
+        );
 
-        CompositeRatePolicy ratePolicy = new CompositeRatePolicy(
-                Duration.ofSeconds(10), // 10초당
-                List.of(dayOfWeekCalculator)
+        DayAmountFeeCondition holidayFeeCondition = new DayAmountFeeCondition(
+                List.of(
+                        DayOfWeek.SATURDAY,
+                        DayOfWeek.SUNDAY
+                )
+        );
+
+        FeeRule weekFeeRule = new FeeRule(
+                weekFeeCondition,
+                Money.wons(38),
+                Duration.ofSeconds(10)
+        );
+
+        FeeRule holidayFeeRule = new FeeRule(
+                holidayFeeCondition,
+                Money.wons(19),
+                Duration.ofSeconds(10)
+        );
+
+        BasicRatePolicy ratePolicy = new BasicRatePolicy(
+                List.of(
+                        weekFeeRule,
+                        holidayFeeRule
+                )
         );
 
         Phone phone = new Phone(ratePolicy);
 
         Call call = new Call(
-                LocalDateTime.of(2026, 5, 1, 21, 0), // 금요일
-                LocalDateTime.of(2026, 5, 2, 3, 0)   // 토요일
+                new DateTimeRange(
+                        LocalDateTime.of(2026, 5, 1, 21, 0), // 금요일
+                        LocalDateTime.of(2026, 5, 2, 3, 0)   // 토요일
+                )
         );
 
         phone.addCall(call);
@@ -122,28 +172,39 @@ public class Main {
     // 1~3분: 20원 구간 2분 계산
     // 540
     public static void timeSlotRateTest() {
-        TimeSlotAmountCalculator firstMinute = new TimeSlotAmountCalculator(
-                Duration.ZERO,
-                Duration.ofMinutes(1),
-                Money.wons(50)
+        TimeSlotAmountFeeCondition firstFeeCondition = new TimeSlotAmountFeeCondition(
+                Duration.ofSeconds(0),
+                Duration.ofMinutes(1)
         );
 
-        TimeSlotAmountCalculator afterFirstMinute = new TimeSlotAmountCalculator(
+        TimeSlotAmountFeeCondition afterFeeCondition = new TimeSlotAmountFeeCondition(
                 Duration.ofMinutes(1),
-                Duration.ofDays(9999),
-                Money.wons(20)
+                Duration.ofDays(9999)
         );
 
-        CompositeRatePolicy ratePolicy = new CompositeRatePolicy(
-                Duration.ofSeconds(10), // 10초당
-                List.of(firstMinute, afterFirstMinute)
+        FeeRule firstFeeRule = new FeeRule(
+                firstFeeCondition,
+                Money.wons(50),
+                Duration.ofSeconds(10)
+        );
+
+        FeeRule afterFeeRule = new FeeRule(
+                afterFeeCondition,
+                Money.wons(20),
+                Duration.ofSeconds(10)
+        );
+
+        BasicRatePolicy ratePolicy = new BasicRatePolicy(
+                List.of(firstFeeRule, afterFeeRule)
         );
 
         Phone phone = new Phone(ratePolicy);
 
         Call call = new Call(
-                LocalDateTime.of(2026, 4, 30, 0, 0),
-                LocalDateTime.of(2026, 4, 30, 0, 3)
+                new DateTimeRange(
+                        LocalDateTime.of(2026, 4, 30, 0, 0),
+                        LocalDateTime.of(2026, 4, 30, 0, 3)
+                )
         );
 
         phone.addCall(call);
